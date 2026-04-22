@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  # ----------------------------------------------------
+  # 1. Gateway Script (Central API / Spawner)
+  # ----------------------------------------------------
+  gateway:
+    build: 
+      context: ./gateway-script
+      dockerfile: Dockerfile
+    container_name: agent_gateway
+    restart: unless-stopped
+    ports:
+      - "8000:8000" # Web UI and API
+    volumes:
+      - ./data:/app/data                # Persistent storage for configs and memory
+      - /var/run/docker.sock:/var/run/docker.sock # Docker-in-Docker for spawning agents
+    environment:
+      - DATA_DIR=/app/data
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - GATEWAY_URL=http://gateway:8000
+    depends_on:
+      - mempalace-server
+
+  # ----------------------------------------------------
+  # 2. Paperclip (Corporate Orchestrator)
+  # ----------------------------------------------------
+  paperclip:
+    # Assuming standard paperclip orchestrator image or local instance
+    # Replace with official image if available publicly on DockerHub/GHCR
+    image: node:20-alpine
+    container_name: paperclip_orchestrator
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ./data/paperclip:/app/data
+    # In production, paperclip usually requires building the config or using npx:
+    command: >
+      sh -c "npm install -g paperclip-ai && paperclip start --workspace /app/data"
+    ports:
+      - "3000:3000" # Paperclip UI
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-""}
+      - HTTP_ADAPTER_URL=http://gateway:8000/webhook/paperclip
+    depends_on:
+      - gateway
+
+  # ----------------------------------------------------
+  # 3. MemPalace Server (Shared Memory Layer)
+  # ----------------------------------------------------
+  mempalace-server:
+    image: python:3.11-slim
+    container_name: mempalace_server
+    restart: unless-stopped
+    ports:
+      - "5000:5000" # MCP / HTTP Memory server
+    volumes:
+      - ./data/mempalace_db:/root/.mempalace
+    command: >
+      sh -c "pip install mempalace fastapi uvicorn && mempalace init && python -m uvicorn mempalace.api:app --host 0.0.0.0 --port 5000"
+
+  # ----------------------------------------------------
+  # 4. Hermes Core (CEO Agent - Default Spawns on start)
+  # ----------------------------------------------------
+  ceo_hermes:
+    image: nousresearch/hermes-agent:latest
+    container_name: worker_ceo_hermes
+    restart: unless-stopped
+    volumes:
+      - ./data/agents/ceo_hermes:/opt/data
+      # Mount mempalace DB directly to allow local Python MCP execution if needed, 
+      # or just connect over HTTP API.
+    environment:
+      - AGENT_ROLE=CEO
+      - SYSTEM_PROMPT="You are the CEO. You delegate tasks to workers via the Gateway API. You do not do manual tasks yourself."
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-""}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-""}
+    depends_on:
+      - mempalace-server
+    command: gateway run
+
+  # ----------------------------------------------------
+  # 5. OpenClaw Base Worker (Default Worker on start)
+  # ----------------------------------------------------
+  worker_openclaw_1:
+    image: node:20 # Placeholder for openclaw image
+    container_name: worker_openclaw_1
+    restart: unless-stopped
+    volumes:
+      - ./data/agents/worker_1:/root/.openclaw
+    environment:
+      - AGENT_ROLE=Worker
+      - AGENT_SKILLS=coding,research
+      - MCP_MEMPALACE_URL=http://mempalace-server:5000
+    command: >
+      sh -c "npm install -g openclaw && openclaw start --daemon"
+
+volumes:
+  mempalace_data:

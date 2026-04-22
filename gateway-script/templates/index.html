@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Agent Orchestrator</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body class="min-h-screen p-8 font-sans">
+    <div class="max-w-4xl mx-auto space-y-8">
+        
+        <header class="text-center space-y-2">
+            <h1 class="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">
+                Nexus Orchestrator
+            </h1>
+            <p class="text-slate-400">Manage Paperclip, Hermes, OpenClaw, and MemPalace.</p>
+        </header>
+
+        <!-- API Keys Setup -->
+        <section class="glass-panel p-6 rounded-2xl shadow-xl space-y-4">
+            <h2 class="text-2xl font-semibold border-b border-slate-700 pb-2">1. System API Keys</h2>
+            <p class="text-sm text-slate-400">Configure global keys. Agents will auto-inherit these parameters via the gateway.</p>
+            <form id="keysForm" class="space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm mb-1 text-slate-300">OpenAI API Key</label>
+                        <input type="password" id="openaiKey" class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white focus:outline-none focus:border-blue-500" placeholder="sk-...">
+                    </div>
+                    <div>
+                        <label class="block text-sm mb-1 text-slate-300">Anthropic (Claude) API Key</label>
+                        <input type="password" id="anthropicKey" class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white focus:outline-none focus:border-purple-500" placeholder="sk-ant-...">
+                    </div>
+                    <div>
+                        <label class="block text-sm mb-1 text-slate-300">Gemini/Google Key</label>
+                        <input type="password" id="geminiKey" class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white focus:outline-none focus:border-green-500" placeholder="AIza...">
+                    </div>
+                </div>
+                <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white font-medium py-2 px-4 rounded transition">
+                    Save Variables
+                </button>
+            </form>
+            <p id="keysStatus" class="text-sm text-green-400 hidden"></p>
+        </section>
+
+        <!-- Spawn New Agent -->
+        <section class="glass-panel p-6 rounded-2xl shadow-xl space-y-4">
+            <h2 class="text-2xl font-semibold border-b border-slate-700 pb-2">2. Spawn Worker Agent</h2>
+            <p class="text-sm text-slate-400">Instantly deploy a new isolated container. Memory context is generated dynamically via MemPalace.</p>
+            <form id="spawnForm" class="space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm mb-1 text-slate-300">Agent Framework</label>
+                        <select id="agentType" class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white focus:outline-none focus:border-blue-500">
+                            <option value="openclaw">OpenClaw (Hands-on executor worker)</option>
+                            <option value="hermes">Hermes (Smart delegation/skills worker)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm mb-1 text-slate-300">Parent (Delegator)</label>
+                        <input type="text" id="parentAgent" value="CEO" class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white focus:outline-none" readonly>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm mb-1 text-slate-300">Task Instruction / Persona</label>
+                    <textarea id="instruction" rows="3" class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white focus:outline-none focus:border-blue-500" placeholder="E.g. You are a Senior Developer. Your task is to write tests for the backend API..."></textarea>
+                </div>
+                <button type="submit" class="bg-purple-600 hover:bg-purple-500 text-white font-medium py-2 px-6 rounded transition inline-flex items-center gap-2">
+                    <svg class="w-5 h-5 hidden" id="spawnSpinner" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-spin"/></svg>
+                    Spawn Container
+                </button>
+            </form>
+            <div id="spawnStatus" class="p-3 bg-slate-800 border border-slate-700 rounded hidden text-sm"></div>
+        </section>
+
+    </div>
+
+    <script>
+        document.getElementById('keysForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = e.target.querySelector('button');
+            const status = document.getElementById('keysStatus');
+            btn.innerHTML = 'Saving...';
+            
+            const payload = {
+                openai_key: document.getElementById('openaiKey').value,
+                anthropic_key: document.getElementById('anthropicKey').value,
+                gemini_key: document.getElementById('geminiKey').value
+            };
+
+            try {
+                const res = await fetch('/api/keys', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                status.textContent = "Keys saved to ./data/env/.env successfully!";
+                status.classList.remove('hidden');
+                setTimeout(() => status.classList.add('hidden'), 3000);
+            } catch (err) {
+                alert("Error saving keys");
+            }
+            btn.innerHTML = 'Save Variables';
+        });
+
+        document.getElementById('spawnForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const spinner = document.getElementById('spawnSpinner');
+            const statusbox = document.getElementById('spawnStatus');
+            
+            spinner.classList.remove('hidden');
+            statusbox.classList.add('hidden');
+            
+            const payload = {
+                agent_type: document.getElementById('agentType').value,
+                instruction: document.getElementById('instruction').value,
+                parent_agent: document.getElementById('parentAgent').value
+            };
+
+            try {
+                const res = await fetch('/api/spawn', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                
+                statusbox.classList.remove('hidden');
+                if (data.status === 'success') {
+                    statusbox.innerHTML = `<span class="text-green-400">Success!</span> Container spawned.<br>Agent ID: <code>${data.agent_id}</code><br>Container Short ID: <code>${data.container_id}</code>`;
+                } else {
+                    statusbox.innerHTML = `<span class="text-red-400">Error:</span> ${data.reason}`;
+                }
+            } catch (err) {
+                statusbox.classList.remove('hidden');
+                statusbox.innerHTML = `<span class="text-red-400">Network Error.</span> Make sure the Gateway is accepting requests.`;
+            }
+            spinner.classList.add('hidden');
+        });
+    </script>
+</body>
+</html>

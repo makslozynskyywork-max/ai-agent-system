@@ -1,0 +1,20 @@
+# Environments
+.env
+
+# MacOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+
+# Local Data (Persist locally, do not push everything to GitHub by default)
+# We might want to keep the folder structure but not the db contents
+data/mempalace-db/*
+!data/mempalace-db/.gitkeep
+
+data/agents/*
+!data/agents/.gitkeep
+
+data/paperclip/*
+!data/paperclip/.gitkeep
