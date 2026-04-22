@@ -22,7 +22,7 @@ cp .env.example ./data/env/.env
 ### Крок 2. Запуск всієї системи
 Система налаштована через єдиний контур:
 ```bash
-docker-compose up -d --build
+docker compose up -d --build
 ```
 > При першому запуску Docker завантажить всі необхідні образи (Python, Node, Paperclip, MemPalace) та збілдить ваш кастомний Gateway-скрипт.
 
